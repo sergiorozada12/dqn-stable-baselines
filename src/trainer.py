@@ -41,9 +41,11 @@ class DQNTrainer:
         return self.env.action_space.sample()
 
     def get_greedy_action(self, state):
-        state_tensor = torch.tensor(state, dtype=torch.float)
-        q_values = self.model.forward(state_tensor)
-        return q_values.argmax().item()
+        with torch.no_grad():
+            state_tensor = torch.tensor(state, dtype=torch.float)
+            q_values = self.model.forward(state_tensor)
+            action = q_values.abs().argmax().item()
+        return action
 
     def choose_action(self, state):
         if np.random.rand() < self.epsilon:
@@ -58,7 +60,7 @@ class DQNTrainer:
             self.optimizer.zero_grad()
 
             q = self.model.forward(sample.state)[sample.action]
-            q_next = self.model.forward(sample.next_state).max()
+            q_next = self.model.forward(sample.next_state).max() if not sample.done else 0
             q_target = sample.reward + self.gamma*q_next
 
             loss = self.criterion(q, q_target)
@@ -77,7 +79,8 @@ class DQNTrainer:
             if is_train:
                 state_tensor =  torch.tensor(state, dtype=torch.float)
                 state_prime_tensor =  torch.tensor(state_prime, dtype=torch.float)
-                self.buffer.push(state_tensor, action, state_prime_tensor, reward, done)
+                reward_tensor = torch.tensor(reward, dtype=torch.float)
+                self.buffer.push(state_tensor, action, state_prime_tensor, reward_tensor, done)
                 self.update_model()
 
             if done:
